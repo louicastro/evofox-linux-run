@@ -82,6 +82,8 @@ def parse_action(val):
     raise ValueError(f"Unknown action '{val}'. Valid names: {', '.join(sorted(ACTION_NAMES.keys()))}")
 
 def dpi_to_index(target_dpi):
+    if not 200 <= target_dpi <= 12800:
+        raise ValueError('DPI must be between 200 and 12800')
     if target_dpi <= 200:
         return 1, 200
     if target_dpi >= 11600:
@@ -125,7 +127,7 @@ def find_control_device():
             if is_control:
                 return node
             candidates.append(node)
-    return candidates[-1] if candidates else None
+    return None
 
 def send_packet(dev_path, packet):
     """Send 8-byte HID Feature Report strictly via ioctl. Never calls write."""
@@ -203,6 +205,12 @@ def main():
     sub.add_parser("save", help="Commit current settings to mouse onboard flash memory")
 
     args = parser.parse_args()
+
+    if args.command == 'dpi' and not 200 <= args.value <= 12800:
+        parser.error('DPI must be between 200 and 12800')
+
+    if args.command == 'color' and (len(args.hex_color.lstrip('#')) != 6 or any(c not in '0123456789abcdefABCDEF' for c in args.hex_color.lstrip('#'))):
+        parser.error('color must be a six-digit hexadecimal value such as #ff00aa')
 
     if not args.command:
         parser.print_help()
