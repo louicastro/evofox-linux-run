@@ -95,11 +95,9 @@ static char *find_device_path(void) {
     struct dirent *entry;
     char path_buf[512];
     char uevent_buf[1024];
-    char candidates[4][280];
-    int count = 0;
     char *control_node = NULL;
 
-    while ((entry = readdir(dir)) != NULL && count < 4) {
+    while ((entry = readdir(dir)) != NULL) {
         if (entry->d_name[0] == '.') continue;
 
         snprintf(path_buf, sizeof(path_buf), "/sys/class/hidraw/%s/device/uevent", entry->d_name);
@@ -110,31 +108,35 @@ static char *find_device_path(void) {
         fclose(f);
         uevent_buf[len] = '\0';
 
-        if (strstr(uevent_buf, "30FA") && strstr(uevent_buf, "1440")) {
-            char rdesc_path[512];
-            snprintf(rdesc_path, sizeof(rdesc_path), "/sys/class/hidraw/%s/device/report_descriptor", entry->d_name);
-            FILE *rf = fopen(rdesc_path, "rb");
-            if (rf) {
-                uint8_t rdesc[256];
-                size_t rlen = fread(rdesc, 1, sizeof(rdesc), rf);
-                fclose(rf);
-                for (size_t i = 0; i + 1 < rlen; i++) {
-                    if (rdesc[i] == 0x85 && rdesc[i+1] == 0x07) {
-                        snprintf(candidates[count], sizeof(candidates[count]), "/dev/%s", entry->d_name);
-                        control_node = strdup(candidates[count]);
-                        break;
-                    }
-                }
+        /* HID_ID format is bus:vendor:product. Match the complete VID/PID. */
+        if (!strstr(uevent_buf, "000030FA:00001440")) continue;
+
+        snprintf(path_buf, sizeof(path_buf), "/sys/class/hidraw/%s/device/report_descriptor", entry->d_name);
+        FILE *rf = fopen(path_buf, "rb");
+        if (!rf) continue;
+
+        uint8_t rdesc[1024];
+        size_t rlen = fread(rdesc, 1, sizeof(rdesc), rf);
+        fclose(rf);
+
+        /* Select only the interface advertising Feature Report ID 0x07. */
+        bool has_report_id = false;
+        for (size_t i = 0; i + 1 < rlen; i++) {
+            if (rdesc[i] == 0x85 && rdesc[i + 1] == 0x07) {
+                has_report_id = true;
+                break;
             }
-            snprintf(candidates[count], sizeof(candidates[count]), "/dev/%s", entry->d_name);
-            count++;
         }
+        if (!has_report_id) continue;
+
+        char node[280];
+        snprintf(node, sizeof(node), "/dev/%s", entry->d_name);
+        control_node = strdup(node);
+        break;
     }
 
     closedir(dir);
-    if (control_node) return control_node;
-    if (count > 0) return strdup(candidates[count - 1]);
-    return NULL;
+    return control_node;
 }
 
 /* Send 8-byte HID Feature Report strictly via ioctl. Never calls write. */
@@ -202,6 +204,10 @@ static int cmd_set_stage(const char *dev_path, int stage) {
 
 /* Configure DPI for a specific stage */
 static int cmd_set_dpi(const char *dev_path, int stage, uint32_t target_dpi) {
+    if (target_dpi < 200 || target_dpi > 12800) {
+        fprintf(stderr, "Error: DPI must be between 200 and 12800.\\n");
+        return 1;
+    }
     if (stage < 1 || stage > 6) {
         fprintf(stderr, "Error: DPI stage must be between 1 and 6 (got %d).\n", stage);
         return 1;
