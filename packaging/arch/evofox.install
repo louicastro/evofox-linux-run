@@ -1,0 +1,21 @@
+post_install() {
+  if command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules || true
+    udevadm trigger --subsystem-match=hidraw || true
+  fi
+  cat <<'EOF'
+EvoFox Linux installed.
+Reconnect the mouse after installation so the active-seat udev rule can apply.
+The GTK interface is optional; install gtk3 and python-gobject for it.
+EOF
+}
+
+post_upgrade() {
+  post_install
+}
+
+post_remove() {
+  if command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules || true
+  fi
+}
