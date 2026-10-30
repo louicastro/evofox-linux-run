@@ -76,11 +76,13 @@ All communication uses **8-byte HID Feature Reports** via `ioctl(HIDIOCSFEATURE)
 - Python 3 + PyGObject (GTK 3) for GUI, or just the C binary
 - No proprietary drivers needed
 
-## Safety
+## Safety & Security Architecture
 
-- **Zero keyboard interference** — strictly targets VID `30FA` / PID `1440`
-- Uses `ioctl()` only, never `write()` on HID nodes
-- Keyboard nodes (`/dev/hidraw4`, `/dev/hidraw5`) remain untouched at `0600`
+- **Strict VID / PID restriction** — Only USB `30FA:1440` devices are ever matched or configured.
+- **No hardcoded device paths** — Automatically identifies the vendor control hidraw interface via sysfs and HID Report Descriptor validation (`[0x85, 0x07]`).
+- **Never interferes with other peripherals** — Keyboards, trackpads, and other HID devices are completely untouched.
+- **Secure udev permission strategy** — Uses systemd `TAG+="uaccess"` (dynamic ACLs for active seat users) and `GROUP="input"` (`MODE="0660"`), completely eliminating insecure world-writable (`0666`) permissions.
+- **Strict ioctl feature reports** — Uses `ioctl(HIDIOCSFEATURE)` strictly on the vendor Feature Report ID 0x07, without raw `write()`.
 
 ## License
 

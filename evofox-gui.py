@@ -121,23 +121,14 @@ def fix_permissions_polkit():
     cmd = [
         'pkexec', 'sh', '-c',
         'cat << \'EOF\' > /etc/udev/rules.d/99-evofox.rules\n'
-        'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
-        'KERNEL=="hidraw*", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
+        'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", TAG+="uaccess", GROUP="input", MODE="0660"\n'
         'EOF\n'
         'udevadm control --reload-rules && udevadm trigger --subsystem-match=hidraw --attr-match=idVendor=30fa 2>/dev/null || true\n'
-        'for dev in /sys/class/hidraw/hidraw*; do\n'
-        '  if [ -f "$dev/device/uevent" ]; then\n'
-        '    if grep -qi "30fa" "$dev/device/uevent" && grep -qi "1440" "$dev/device/uevent"; then\n'
-        '      chmod 666 "/dev/$(basename $dev)" 2>/dev/null || true\n'
-        '    fi\n'
-        '  fi\n'
-        'done\n'
-        'chmod 600 /dev/hidraw4 /dev/hidraw5 2>/dev/null || true\n'
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0:
-            return True, "Permissions configured strictly for mouse!"
+            return True, "Secure permissions configured strictly for mouse!"
         return False, res.stderr or "Authorization canceled."
     except Exception as e:
         return False, str(e)
@@ -214,7 +205,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <!-- Permission Alert -->
       <div class="alert-bar" id="permBar">
         <div>
-          <b>⚠️ Root Permission Required:</b> Mouse requires access to <tt>/dev/hidraw1</tt>. Click to unlock once.
+          <b>⚠️ Permission Required:</b> Mouse requires non-root access permissions. Click to unlock once.
         </div>
         <button class="btn-unlock" onclick="unlockPermissions()">🔓 Unlock with Password</button>
       </div>

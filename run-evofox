@@ -1,57 +1,85 @@
 #!/bin/bash
 # ==============================================================================
 # EvoFox Phantom Air / Instant A825 Linux Universal Launcher
+# Target OS: Arch Linux, CachyOS, and general Linux desktop environments.
 # Launches the Native GTK GUI, Web GUI, or CLI tool.
-# Strictly operates ONLY on the mouse (VID 30fa, PID 1440).
+# Strictly operates ONLY on USB VID 0x30FA / PID 0x1440.
+# Zero hardcoded /dev/hidraw assumptions.
 # ==============================================================================
 
-set -e
+set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# If CLI arguments are provided, pass directly to evofox-ctl
-if [ $# -gt 0 ]; then
-    if [ -x "$DIR/evofox-ctl" ]; then
-        exec "$DIR/evofox-ctl" "$@"
-    elif [ -x "$DIR/evofox/tools/evofox-ctl" ]; then
-        exec "$DIR/evofox/tools/evofox-ctl" "$@"
+# Prioritize local binaries / scripts in current directory, then tools/ subdirectory
+CTL_BIN=""
+if [ -x "${DIR}/evofox-ctl" ]; then
+    CTL_BIN="${DIR}/evofox-ctl"
+elif [ -x "${DIR}/tools/evofox-ctl" ]; then
+    CTL_BIN="${DIR}/tools/evofox-ctl"
+fi
+
+PY_CLI=""
+if [ -f "${DIR}/evofox.py" ]; then
+    PY_CLI="${DIR}/evofox.py"
+elif [ -f "${DIR}/tools/evofox.py" ]; then
+    PY_CLI="${DIR}/tools/evofox.py"
+fi
+
+# 1. If CLI arguments were supplied, execute CLI directly
+if [ "$#" -gt 0 ]; then
+    if [ -n "${CTL_BIN}" ]; then
+        exec "${CTL_BIN}" "$@"
+    elif [ -n "${PY_CLI}" ]; then
+        exec python3 "${PY_CLI}" "$@"
     else
-        exec python3 "$DIR/evofox.py" "$@"
+        echo "Error: Neither evofox-ctl binary nor evofox.py script found." >&2
+        exit 1
     fi
 fi
 
-# Ensure mouse device permissions are configured if running interactively
-if [ -e /dev/hidraw1 ] && [ ! -w /dev/hidraw1 ]; then
-    if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-        if command -v pkexec >/dev/null 2>&1; then
-            pkexec sh -c "
-                cat << 'EOF' > /etc/udev/rules.d/99-evofox.rules
-SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"30fa\", ATTRS{idProduct}==\"1440\", MODE=\"0666\", TAG+=\"uaccess\"
-KERNEL==\"hidraw*\", ATTRS{idVendor}==\"30fa\", ATTRS{idProduct}==\"1440\", MODE=\"0666\", TAG+=\"uaccess\"
-EOF
-                udevadm control --reload-rules 2>/dev/null || true
-                udevadm trigger --subsystem-match=hidraw --attr-match=idVendor=30fa 2>/dev/null || true
-                chmod 666 /dev/hidraw1 2>/dev/null || true
-            " 2>/dev/null || true
-        fi
+# 2. Check hardware permissions safely without hardcoding device numbers
+# If the device is detected but permission is denied, offer to run fix-permissions.sh
+if [ -x "${DIR}/fix-permissions.sh" ] && [ ! -f "/etc/udev/rules.d/99-evofox.rules" ]; then
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        echo "Note: First-time setup detected. Configuring secure udev permissions..."
+        "${DIR}/fix-permissions.sh" || true
     fi
 fi
 
-# Try Native GTK 3 GUI first (best desktop integration)
-if python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk; exit(0 if Gtk.init_check()[0] else 1)" 2>/dev/null; then
-    if [ -f "$DIR/evofox-gtk.py" ]; then
-        exec python3 "$DIR/evofox-gtk.py"
-    elif [ -f "$DIR/evofox/evofox-gtk.py" ]; then
-        exec python3 "$DIR/evofox/evofox-gtk.py"
+# 3. Launch Native GTK 3 GUI if PyGObject and a display server are available
+GTK_GUI=""
+if [ -f "${DIR}/evofox-gtk.py" ]; then
+    GTK_GUI="${DIR}/evofox-gtk.py"
+elif [ -f "${DIR}/tools/evofox-gtk.py" ]; then
+    GTK_GUI="${DIR}/tools/evofox-gtk.py"
+fi
+
+if [ -n "${GTK_GUI}" ]; then
+    if python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk; exit(0 if Gtk.init_check()[0] else 1)" 2>/dev/null; then
+        exec python3 "${GTK_GUI}"
     fi
 fi
 
-# Fallback to Web GUI Control Center
-if [ -f "$DIR/evofox-gui.py" ]; then
-    exec python3 "$DIR/evofox-gui.py"
-elif [ -f "$DIR/evofox/evofox-gui.py" ]; then
-    exec python3 "$DIR/evofox/evofox-gui.py"
+# 4. Fallback to Web GUI Control Center
+WEB_GUI=""
+if [ -f "${DIR}/evofox-gui.py" ]; then
+    WEB_GUI="${DIR}/evofox-gui.py"
+elif [ -f "${DIR}/tools/evofox-gui.py" ]; then
+    WEB_GUI="${DIR}/tools/evofox-gui.py"
 fi
 
-echo "Error: Could not find GUI files." >&2
+if [ -n "${WEB_GUI}" ]; then
+    echo "Starting EvoFox Web Control Panel..."
+    exec python3 "${WEB_GUI}"
+fi
+
+# 5. Fallback to CLI status if no GUI is available
+if [ -n "${CTL_BIN}" ]; then
+    exec "${CTL_BIN}" status
+elif [ -n "${PY_CLI}" ]; then
+    exec python3 "${PY_CLI}" status
+fi
+
+echo "Error: No EvoFox components found in ${DIR}." >&2
 exit 1

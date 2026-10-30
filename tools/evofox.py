@@ -2,8 +2,9 @@
 """
 evofox.py: Standalone Linux CLI configuration tool for Amkette EvoFox Phantom Air
            (Instant Microelectronics A825, USB VID 30FA:1440).
-Features real-time DPI, stage switching, dedicated color interface, and 12,000 DPI preset.
-Strictly communicates via ioctl on /dev/hidraw1 without touching any keyboards.
+Features real-time DPI, stage switching, dedicated color interface, button remapping,
+and 12,000 DPI preset.
+Strictly communicates via ioctl on the dynamically detected mouse control node.
 """
 
 import sys
@@ -99,7 +100,10 @@ def dpi_to_index(target_dpi):
     return best_idx, best_dpi
 
 def find_control_device():
-    """Find the specific vendor control node for Amkette EvoFox mouse (VID 30FA, PID 1440)."""
+    """
+    Dynamically locate the vendor control node for Amkette EvoFox mouse (VID 30FA, PID 1440).
+    Verifies that the HID Report Descriptor contains Feature Report ID 0x07.
+    """
     candidates = []
     for dev_path in sorted(glob.glob('/sys/class/hidraw/hidraw*')):
         name = os.path.basename(dev_path)
@@ -108,18 +112,20 @@ def find_control_device():
             continue
         try:
             with open(uevent_file, 'r', errors='ignore') as f:
-                content = f.read()
-        except:
+                content = f.read().lower()
+        except OSError:
             continue
-        if ('30FA' in content or '30fa' in content) and '1440' in content:
+
+        if '30fa' in content and '1440' in content:
             rdesc_file = os.path.join(dev_path, 'device', 'report_descriptor')
             is_control = False
             if os.path.exists(rdesc_file):
                 try:
                     with open(rdesc_file, 'rb') as rf:
-                        if b'\x85\x07' in rf.read():
+                        rdesc = rf.read()
+                        if b'\x85\x07' in rdesc:
                             is_control = True
-                except:
+                except OSError:
                     pass
             node = f'/dev/{name}'
             if is_control:
@@ -132,6 +138,7 @@ def send_packet(dev_path, packet):
     target = dev_path or find_control_device()
     if not target:
         print("Error: EvoFox Phantom Air (30FA:1440) not found.", file=sys.stderr)
+        print("Please verify the mouse is connected via USB ('lsusb').", file=sys.stderr)
         return False
 
     buf = bytearray(8)
@@ -145,8 +152,8 @@ def send_packet(dev_path, packet):
         return True
     except PermissionError:
         print(f"Error: Permission denied opening {target}.", file=sys.stderr)
-        print("Hint: Run fix-permissions.sh to configure non-root access:", file=sys.stderr)
-        print("      sudo ./fix-permissions.sh", file=sys.stderr)
+        print("Hint: Run the one-time secure permission setup (no root required afterwards):", file=sys.stderr)
+        print("      ./fix-permissions.sh", file=sys.stderr)
         return False
     except OSError as e:
         print(f"Communication error on {target}: {e}", file=sys.stderr)
@@ -200,6 +207,10 @@ def main():
     p_btn.add_argument("--b6", type=str, help="Button 6 (Top DPI Button)")
     p_btn.add_argument("--save", action="store_true", help="Save to onboard flash memory")
 
+    p_preset = sub.add_parser("preset", help="Apply quick button preset")
+    p_preset.add_argument("name", choices=["default", "gaming", "media", "rgb"], help="Preset name")
+    p_preset.add_argument("--save", action="store_true", help="Save to onboard flash memory")
+
     sub.add_parser("save", help="Commit current settings to mouse onboard flash memory")
 
     args = parser.parse_args()
@@ -209,7 +220,7 @@ def main():
         sys.exit(1)
 
     dev_path = find_control_device()
-    if not dev_path:
+    if not dev_path and args.command != "status":
         print("Error: EvoFox Phantom Air / Instant A825 (30FA:1440) not found.", file=sys.stderr)
         print("Please verify the mouse is connected via USB ('lsusb').", file=sys.stderr)
         sys.exit(1)
@@ -218,20 +229,22 @@ def main():
         print("=" * 65)
         print(" EvoFox Phantom Air / Instant A825 Linux Configuration Utility")
         print("=" * 65)
-        print("Device Status:    CONNECTED")
-        print(f"Hardware ID:      USB VID 0x{TARGET_VID:04X}, PID 0x{TARGET_PID:04X}")
-        print("Sensor Model:     Instant Microelectronics Instant A825")
-        print(f"Control Node:     {dev_path}")
-        print("Max Resolution:   12,800 DPI (Supported steps: 200 to 12800)")
-        print("Supported Rates:  125 Hz, 250 Hz, 500 Hz, 1000 Hz")
-        print("RGB Modes:        14 effects (0=Off, 1=Breathe, 2=Static, 3=Neon, 4=Wave, etc.)")
-        print("Programmable:     6 Buttons (Rapid Fire, Double Click, Media, DPI, LED)")
-        print("=" * 65)
-        print("Supported Button Actions:")
-        print("  1=Left, 2=Right, 3=Middle, 4=Backward, 5=Forward, 6=DPILoop")
-        print("  14=RapidFire, 15=DoubleClick, 16=DPI+, 17=DPI-, 19=LEDModeSwitch")
-        print("  20=Mute, 21=Vol+, 22=Vol-, 25=NextTrack, 26=PrevTrack, 27=Play/Pause")
-        print("  30=ShowDesktop, 50=Disabled")
+        if not dev_path:
+            print("Device Status:    DISCONNECTED")
+            print(f"Hardware ID:      USB VID 0x{TARGET_VID:04X}, PID 0x{TARGET_PID:04X}")
+            print("Control Node:     None found in /sys/class/hidraw")
+        else:
+            accessible = os.access(dev_path, os.R_OK | os.W_OK)
+            print("Device Status:    CONNECTED")
+            print(f"Hardware ID:      USB VID 0x{TARGET_VID:04X}, PID 0x{TARGET_PID:04X}")
+            print("Sensor Model:     Instant Microelectronics Instant A825")
+            print(f"Control Node:     {dev_path}")
+            print(f"Access State:     {'READY (Read/Write OK)' if accessible else 'PERMISSION DENIED'}")
+            print("Max Resolution:   12,800 DPI (Supported steps: 200 to 12800)")
+            print("Supported Rates:  125 Hz, 250 Hz, 500 Hz, 1000 Hz")
+            print("RGB Modes:        8 effects (0=Off, 1=Breathe, 2=Static, 3=Neon, 4=Wave, etc.)")
+            print("Programmable:     6 Buttons (Rapid Fire, Double Click, Media, DPI, LED)")
+            print("Security State:   Strict isolation to 30fa:1440 (keyboards untouched)")
         print("=" * 65)
 
     elif args.command == "stage":
@@ -274,9 +287,6 @@ def main():
         g4 = (g >> 4) & 0x0F
         r4 = (r >> 4) & 0x0F
         b4 = (b >> 4) & 0x0F
-        # Instant A825 byte layout:
-        # byte 2: ((stage - 1) << 5) | g4
-        # byte 3: (r4 << 4) | b4
         pkt_color = [REPORT_ID, 0x14, ((args.stage - 1) << 5) | g4, (r4 << 4) | b4, 0, 0, 0, 0]
         pkt_stage = [REPORT_ID, 0x10, 0x01, args.stage - 1, 0, 0, 0, 0]
         if send_packet(dev_path, pkt_color):
@@ -293,7 +303,6 @@ def main():
 
         mapping = dict(DEFAULT_BUTTONS)
         mapping[args.button] = act_id
-        # Instant A825 hardware packet order: [ReportID, 0x15, b1, b3, b2, b4, b5, b6]
         pkt = [REPORT_ID, 0x15, mapping[1], mapping[3], mapping[2], mapping[4], mapping[5], mapping[6]]
         if send_packet(dev_path, pkt):
             if args.save:
@@ -301,16 +310,37 @@ def main():
             act_name = ACTION_DESCRIPTIONS.get(act_id, f"Action #{act_id}")
             print(f"✓ Button {args.button} remapped to '{act_name}' (Action ID: {act_id})." + (" [Saved to Flash]" if args.save else " [Live Preview]"))
 
-    elif args.command == "buttons":
+    elif args.command == "preset":
         mapping = dict(DEFAULT_BUTTONS)
-        if args.preset == "gaming":
+        if args.name == "gaming":
             mapping[4] = 14  # Rapid Fire on Button 4
-        elif args.preset == "media":
+        elif args.name == "media":
             mapping[4] = 21  # Vol+
             mapping[5] = 22  # Vol-
             mapping[6] = 27  # Play/Pause
-        elif args.preset == "rgb":
+        elif args.name == "rgb":
             mapping[6] = 19  # LED Mode Switch on DPI Button
+
+        pkt = [REPORT_ID, 0x15, mapping[1], mapping[3], mapping[2], mapping[4], mapping[5], mapping[6]]
+        if send_packet(dev_path, pkt):
+            if args.save:
+                save_settings(dev_path)
+            print(f"✓ Preset '{args.name}' applied successfully:")
+            for b_num in range(1, 7):
+                code = mapping[b_num]
+                name = ACTION_DESCRIPTIONS.get(code, f"Action #{code}")
+                print(f"  • Button {b_num}: {name} (ID: {code})")
+
+    elif args.command == "buttons":
+        mapping = dict(DEFAULT_BUTTONS)
+        if args.preset == "gaming":
+            mapping[4] = 14
+        elif args.preset == "media":
+            mapping[4] = 21
+            mapping[5] = 22
+            mapping[6] = 27
+        elif args.preset == "rgb":
+            mapping[6] = 19
 
         for b_num, b_arg in [(1, args.b1), (2, args.b2), (3, args.b3), (4, args.b4), (5, args.b5), (6, args.b6)]:
             if b_arg:

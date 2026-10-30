@@ -1,0 +1,9 @@
+# Secure udev rule for Amkette EvoFox Phantom Air Gaming Mouse (Instant A825 SoC)
+# USB VID: 0x30FA, USB PID: 0x1440
+#
+# Grants access to active local desktop users via systemd-logind ACLs (uaccess)
+# and fallback access to members of the 'input' system group (MODE="0660").
+# Never uses insecure world-writable (0666) permissions.
+# Never touches or affects keyboards, trackpads, or other peripherals.
+
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", TAG+="uaccess", GROUP="input", MODE="0660"

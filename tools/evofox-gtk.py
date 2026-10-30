@@ -149,22 +149,13 @@ def send_packet(packet):
             os.close(fd)
 
 def unlock_permissions_polkit():
-    """Configure non-root access exclusively for VID 30fa / PID 1440 without touching other devices."""
+    """Configure secure non-root access strictly for VID 30fa / PID 1440."""
     cmd = [
         'pkexec', 'sh', '-c',
         'cat << \'EOF\' > /etc/udev/rules.d/99-evofox.rules\n'
-        'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
-        'KERNEL=="hidraw*", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
+        'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", TAG+="uaccess", GROUP="input", MODE="0660"\n'
         'EOF\n'
         'udevadm control --reload-rules && udevadm trigger --subsystem-match=hidraw --attr-match=idVendor=30fa 2>/dev/null || true\n'
-        'for dev in /sys/class/hidraw/hidraw*; do\n'
-        '  if [ -f "$dev/device/uevent" ]; then\n'
-        '    if grep -qi "30fa" "$dev/device/uevent" && grep -qi "1440" "$dev/device/uevent"; then\n'
-        '      chmod 666 "/dev/$(basename $dev)" 2>/dev/null || true\n'
-        '    fi\n'
-        '  fi\n'
-        'done\n'
-        'chmod 600 /dev/hidraw4 /dev/hidraw5 2>/dev/null || true\n'
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True)
@@ -279,12 +270,12 @@ class EvoFoxApp(Gtk.Window):
         # Permission Alert Box
         self.perm_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.perm_box.get_style_context().add_class("alert-box")
-        lbl_perm = Gtk.Label(xalign=0)
-        lbl_perm.set_markup("<b>⚠️ Permissions Required:</b> Mouse requires access to <tt>/dev/hidraw1</tt>. Click to configure once.")
+        self.lbl_perm = Gtk.Label(xalign=0)
+        self.lbl_perm.set_markup("<b>⚠️ Permissions Required:</b> Mouse access permission required. Click to configure once.")
         self.btn_unlock = Gtk.Button(label="🔓 Unlock with Password")
         self.btn_unlock.get_style_context().add_class("btn-unlock")
         self.btn_unlock.connect("clicked", self.on_unlock_clicked)
-        self.perm_box.pack_start(lbl_perm, True, True, 0)
+        self.perm_box.pack_start(self.lbl_perm, True, True, 0)
         self.perm_box.pack_end(self.btn_unlock, False, False, 0)
         vbox.pack_start(self.perm_box, False, False, 0)
 
@@ -525,6 +516,7 @@ class EvoFoxApp(Gtk.Window):
             self.perm_box.set_visible(False)
         elif not ok:
             self.lbl_status.set_markup(f"<span color='#f59e0b'>● Mouse Detected ({dev}) — Permission Required</span>")
+            self.lbl_perm.set_markup(f"<b>⚠️ Permissions Required:</b> Mouse requires access to <tt>{dev}</tt>. Click to configure once.")
             self.perm_box.set_visible(True)
         else:
             self.lbl_status.set_markup(f"<span color='#10b981'>● Mouse Connected &amp; Ready ({dev})</span>")
