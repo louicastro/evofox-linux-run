@@ -2,6 +2,7 @@
 pkgname=evofox-linux-run-git
 pkgver=1.r1.g0000000
 pkgrel=1
+install=evofox.install
 pkgdesc="Linux control suite for the Amkette EvoFox Phantom Air gaming mouse"
 arch=('any')
 url="https://github.com/louicastro/evofox-linux-run"
