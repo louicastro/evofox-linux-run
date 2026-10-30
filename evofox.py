@@ -2,8 +2,7 @@
 """
 evofox.py: Standalone Linux CLI configuration tool for Amkette EvoFox Phantom Air
            (Instant Microelectronics A825, USB VID 30FA:1440).
-Features real-time DPI, stage switching, dedicated color interface, and 12,000 DPI preset.
-Strictly communicates via ioctl on /dev/hidraw1 without touching any keyboards.
+Uses VID/PID and the vendor feature-report descriptor to discover the control node.
 """
 
 import sys
@@ -102,7 +101,6 @@ def dpi_to_index(target_dpi):
 
 def find_control_device():
     """Find the specific vendor control node for Amkette EvoFox mouse (VID 30FA, PID 1440)."""
-    candidates = []
     for dev_path in sorted(glob.glob('/sys/class/hidraw/hidraw*')):
         name = os.path.basename(dev_path)
         uevent_file = os.path.join(dev_path, 'device', 'uevent')
@@ -126,7 +124,6 @@ def find_control_device():
             node = f'/dev/{name}'
             if is_control:
                 return node
-            candidates.append(node)
     return None
 
 def send_packet(dev_path, packet):
