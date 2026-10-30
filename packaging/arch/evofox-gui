@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+APP_DIR=/usr/lib/evofox
+if command -v python3 >/dev/null 2>&1 &&
+   python3 -c "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk; raise SystemExit(0 if Gtk.init_check()[0] else 1)" >/dev/null 2>&1; then
+  exec python3 "$APP_DIR/evofox-gtk.py" "$@"
+fi
+exec python3 "$APP_DIR/evofox-gui.py" "$@"
