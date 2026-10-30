@@ -30,8 +30,8 @@ jobs:
       - name: Rust tests and release build
         working-directory: tools/evofox-rs
         run: |
-          cargo test --locked
-          cargo build --release --locked
+          cargo test
+          cargo build --release
 
   arch-package:
     runs-on: ubuntu-latest
