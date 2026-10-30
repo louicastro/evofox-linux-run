@@ -1,0 +1,9 @@
+[package]
+name = "evofox-ctl"
+version = "1.0.0"
+edition = "2021"
+authors = ["EvoFox Linux Project"]
+description = "High-performance Linux CLI configuration utility for EvoFox Phantom Air / Instant A825 Gaming Mice"
+
+[dependencies]
+# Zero external dependencies: links directly against libc via std for instant, offline compilation.

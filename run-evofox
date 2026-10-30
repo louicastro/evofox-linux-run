@@ -1,0 +1,57 @@
+#!/bin/bash
+# ==============================================================================
+# EvoFox Phantom Air / Instant A825 Linux Universal Launcher
+# Launches the Native GTK GUI, Web GUI, or CLI tool.
+# Strictly operates ONLY on the mouse (VID 30fa, PID 1440).
+# ==============================================================================
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# If CLI arguments are provided, pass directly to evofox-ctl
+if [ $# -gt 0 ]; then
+    if [ -x "$DIR/evofox-ctl" ]; then
+        exec "$DIR/evofox-ctl" "$@"
+    elif [ -x "$DIR/evofox/tools/evofox-ctl" ]; then
+        exec "$DIR/evofox/tools/evofox-ctl" "$@"
+    else
+        exec python3 "$DIR/evofox.py" "$@"
+    fi
+fi
+
+# Ensure mouse device permissions are configured if running interactively
+if [ -e /dev/hidraw1 ] && [ ! -w /dev/hidraw1 ]; then
+    if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+        if command -v pkexec >/dev/null 2>&1; then
+            pkexec sh -c "
+                cat << 'EOF' > /etc/udev/rules.d/99-evofox.rules
+SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"30fa\", ATTRS{idProduct}==\"1440\", MODE=\"0666\", TAG+=\"uaccess\"
+KERNEL==\"hidraw*\", ATTRS{idVendor}==\"30fa\", ATTRS{idProduct}==\"1440\", MODE=\"0666\", TAG+=\"uaccess\"
+EOF
+                udevadm control --reload-rules 2>/dev/null || true
+                udevadm trigger --subsystem-match=hidraw --attr-match=idVendor=30fa 2>/dev/null || true
+                chmod 666 /dev/hidraw1 2>/dev/null || true
+            " 2>/dev/null || true
+        fi
+    fi
+fi
+
+# Try Native GTK 3 GUI first (best desktop integration)
+if python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk; exit(0 if Gtk.init_check()[0] else 1)" 2>/dev/null; then
+    if [ -f "$DIR/evofox-gtk.py" ]; then
+        exec python3 "$DIR/evofox-gtk.py"
+    elif [ -f "$DIR/evofox/evofox-gtk.py" ]; then
+        exec python3 "$DIR/evofox/evofox-gtk.py"
+    fi
+fi
+
+# Fallback to Web GUI Control Center
+if [ -f "$DIR/evofox-gui.py" ]; then
+    exec python3 "$DIR/evofox-gui.py"
+elif [ -f "$DIR/evofox/evofox-gui.py" ]; then
+    exec python3 "$DIR/evofox/evofox-gui.py"
+fi
+
+echo "Error: Could not find GUI files." >&2
+exit 1

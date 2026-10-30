@@ -1,0 +1,6 @@
+# udev rule for Amkette EvoFox Phantom Air / Instant Microelectronics A825 Gaming Mouse
+# Allows non-root users in desktop session to access and configure the mouse without sudo
+
+# Access via uaccess tag (systemd-logind desktop sessions) and mode 0666 fallback
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"

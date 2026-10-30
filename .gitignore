@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.rsrc/
+extracted/
+[0]
+CERTIFICATE
+.bss
+.data
+.idata
+.itext
+.rdata
+.rsrc_1
+.text
+.tls
+\[0\]

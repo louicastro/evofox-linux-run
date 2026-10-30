@@ -1,0 +1,10 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=EvoFox Mouse Control
+Comment=Configuration GUI for EvoFox Phantom Air Gaming Mouse
+Exec=python3 /home/loui/Downloads/evofox/evofox/tools/evofox-gui.py
+Icon=input-mouse
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=mouse;gaming;dpi;evofox;rgb;instant;
