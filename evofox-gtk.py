@@ -104,7 +104,7 @@ def find_mouse_device():
             if is_control:
                 return node
             candidates.append(node)
-    return candidates[-1] if candidates else None
+    return None
 
 def check_permission():
     dev = find_mouse_device()
@@ -148,31 +148,7 @@ def send_packet(packet):
         if fd is not None:
             os.close(fd)
 
-def unlock_permissions_polkit():
-    """Configure non-root access exclusively for VID 30fa / PID 1440 without touching other devices."""
-    cmd = [
-        'pkexec', 'sh', '-c',
-        'cat << \'EOF\' > /etc/udev/rules.d/99-evofox.rules\n'
-        'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
-        'KERNEL=="hidraw*", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", MODE="0666", TAG+="uaccess"\n'
-        'EOF\n'
-        'udevadm control --reload-rules && udevadm trigger --subsystem-match=hidraw --attr-match=idVendor=30fa 2>/dev/null || true\n'
-        'for dev in /sys/class/hidraw/hidraw*; do\n'
-        '  if [ -f "$dev/device/uevent" ]; then\n'
-        '    if grep -qi "30fa" "$dev/device/uevent" && grep -qi "1440" "$dev/device/uevent"; then\n'
-        '      chmod 666 "/dev/$(basename $dev)" 2>/dev/null || true\n'
-        '    fi\n'
-        '  fi\n'
-        'done\n'
-        'chmod 600 /dev/hidraw4 /dev/hidraw5 2>/dev/null || true\n'
-    ]
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        return res.returncode == 0
-    except Exception:
-        return False
-
-# Initialize GTK
+# System permissions are managed by the packaged udev rule, not from the GUI.\n\n# Initialize GTK
 try:
     import gi
     gi.require_version('Gtk', '3.0')
@@ -529,13 +505,6 @@ class EvoFoxApp(Gtk.Window):
         else:
             self.lbl_status.set_markup(f"<span color='#10b981'>● Mouse Connected &amp; Ready ({dev})</span>")
             self.perm_box.set_visible(False)
-
-    def on_unlock_clicked(self, _btn):
-        self.lbl_status.set_markup("<span color='#38bdf8'>● Authorizing via Polkit...</span>")
-        if unlock_permissions_polkit():
-            self.refresh_status()
-        else:
-            self.lbl_status.set_markup("<span color='#ef4444'>● Authorization failed or canceled. Run: <tt>sudo ./fix-permissions.sh</tt></span>")
 
     def update_styles(self):
         for s, btn in self.stage_btns.items():
