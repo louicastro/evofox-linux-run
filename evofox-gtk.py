@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 evofox-gtk: Native GTK 3 Control Center for EvoFox Phantom Air / Instant A825.
-Features real-time Colour Change Interface, live DPI adjustment with 12,000 DPI preset,
-safe ioctl-only communication strictly targeting the mouse, with zero keyboard interference.
+Uses VID/PID and the vendor feature-report descriptor to locate the control node.
 """
 
 import os
@@ -102,7 +101,6 @@ def find_mouse_device():
             node = f'/dev/{name}'
             if is_control:
                 return node
-            candidates.append(node)
     return None
 
 def check_permission():
