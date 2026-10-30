@@ -1,0 +1,2 @@
+# Amkette EvoFox Phantom Air (USB VID:PID 30fa:1440).
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="30fa", ATTRS{idProduct}=="1440", TAG+="uaccess"
