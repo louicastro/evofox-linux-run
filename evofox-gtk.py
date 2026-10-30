@@ -77,8 +77,7 @@ def dpi_to_index(target_dpi):
     return best_idx, best_dpi
 
 def find_mouse_device():
-    """Locate the vendor HID control node for Amkette EvoFox mouse (VID 30FA, PID 1440)."""
-    candidates = []
+    """Locate only the report-ID 0x07 control interface for VID:PID 30fa:1440."""
     for dev_path in sorted(glob.glob('/sys/class/hidraw/hidraw*')):
         name = os.path.basename(dev_path)
         uevent_file = os.path.join(dev_path, 'device', 'uevent')
@@ -148,7 +147,9 @@ def send_packet(packet):
         if fd is not None:
             os.close(fd)
 
-# System permissions are managed by the packaged udev rule, not from the GUI.\n\n# Initialize GTK
+# System permissions are managed by the packaged udev rule, not from the GUI.
+
+# Initialize GTK
 try:
     import gi
     gi.require_version('Gtk', '3.0')
@@ -252,16 +253,13 @@ class EvoFoxApp(Gtk.Window):
         self.btn_save.connect("clicked", self.on_save_clicked)
         header.pack_end(self.btn_save, False, False, 0)
 
-        # Permission Alert Box
+        # Permission guidance only; the GUI never runs privileged commands.
         self.perm_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.perm_box.get_style_context().add_class("alert-box")
         lbl_perm = Gtk.Label(xalign=0)
-        lbl_perm.set_markup("<b>⚠️ Permissions Required:</b> Mouse requires access to <tt>/dev/hidraw1</tt>. Click to configure once.")
-        self.btn_unlock = Gtk.Button(label="🔓 Unlock with Password")
-        self.btn_unlock.get_style_context().add_class("btn-unlock")
-        self.btn_unlock.connect("clicked", self.on_unlock_clicked)
+        lbl_perm.set_line_wrap(True)
+        lbl_perm.set_markup("<b>⚠️ Permission required:</b> Install the EvoFox udev rule, reload udev, then reconnect the mouse.")
         self.perm_box.pack_start(lbl_perm, True, True, 0)
-        self.perm_box.pack_end(self.btn_unlock, False, False, 0)
         vbox.pack_start(self.perm_box, False, False, 0)
 
         # Live Status Line
