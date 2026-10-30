@@ -1,0 +1,41 @@
+# Maintainer: EvoFox Linux Project
+pkgname=evofox-linux-run-git
+pkgver=1.r1.g0000000
+pkgrel=1
+pkgdesc="Linux control suite for the Amkette EvoFox Phantom Air gaming mouse"
+arch=('any')
+url="https://github.com/louicastro/evofox-linux-run"
+license=('MIT')
+depends=('python')
+optdepends=(
+  'gtk3: native GTK 3 desktop interface'
+  'python-gobject: native GTK 3 desktop interface'
+)
+makedepends=('git')
+provides=('evofox-linux-run')
+conflicts=('evofox-linux-run')
+source=("git+https://github.com/louicastro/evofox-linux-run.git#branch=production/arch-cachyos")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/evofox-linux-run"
+  printf '1.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "$srcdir/evofox-linux-run"
+
+  install -Dm0755 evofox.py "$pkgdir/usr/bin/evofox-ctl"
+  install -Dm0755 packaging/arch/evofox-gui "$pkgdir/usr/bin/evofox-gui"
+
+  install -d "$pkgdir/usr/lib/evofox"
+  install -Dm0755 evofox-gtk.py "$pkgdir/usr/lib/evofox/evofox-gtk.py"
+  install -Dm0755 evofox-gui.py "$pkgdir/usr/lib/evofox/evofox-gui.py"
+  install -Dm0755 fix-permissions.sh "$pkgdir/usr/lib/evofox/fix-permissions.sh"
+  install -Dm0644 tools/99-evofox.rules "$pkgdir/usr/lib/evofox/tools/99-evofox.rules"
+
+  install -Dm0644 tools/99-evofox.rules "$pkgdir/usr/lib/udev/rules.d/99-evofox.rules"
+  install -Dm0644 tools/evofox.desktop "$pkgdir/usr/share/applications/evofox.desktop"
+  install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
